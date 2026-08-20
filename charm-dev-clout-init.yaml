@@ -4,6 +4,7 @@ package_update: true
 
 packages:
   - python3-pip
+  - python3-venv
   - jq
   - sysstat
   - zsh
@@ -76,6 +77,12 @@ runcmd:
     sudo -u ubuntu echo 'export PATH=$PATH:$HOME/.local/bin' >> ~ubuntu/.zshrc
     sudo -u ubuntu wget -P ~ubuntu/.oh-my-zsh/themes/ https://raw.githubusercontent.com/Abuelodelanada/charm-dev-utils/main/zsh_themes/juju.zsh-theme
     sudo -u ubuntu sed -i 's/ZSH_THEME="robbyrussell"/ZSH_THEME="juju"/g' ~ubuntu/.zshrc
+
+  - |
+    # Create python venv at ~/repos/venv and auto-activate on login
+    sudo -u ubuntu mkdir -p /home/ubuntu/repos
+    sudo -u ubuntu python3 -m venv /home/ubuntu/repos/venv
+    sudo -u ubuntu echo 'source ~/repos/venv/bin/activate' >> ~ubuntu/.zshrc
 
   - |
     # Make sure juju directory is there

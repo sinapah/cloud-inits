@@ -4,6 +4,7 @@ package_update: true
 
 packages:
   - python3-pip
+  - python3-venv
   - jq
   - sysstat
   - zsh
@@ -68,6 +69,12 @@ runcmd:
     sudo -u ubuntu git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ~ubuntu/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting
     sudo -u ubuntu sed -i 's/plugins=(git)/plugins=(fzf git zsh-autosuggestions zsh-syntax-highlighting virtualenv colored-man-pages juju colorize)/g' ~ubuntu/.zshrc
     sudo -u ubuntu echo 'export PATH=$PATH:$HOME/.local/bin' >> ~ubuntu/.zshrc
+
+  - |
+    # Create python venv at ~/repos/venv and auto-activate on login
+    sudo -u ubuntu mkdir -p /home/ubuntu/repos
+    sudo -u ubuntu python3 -m venv /home/ubuntu/repos/venv
+    sudo -u ubuntu echo 'source ~/repos/venv/bin/activate' >> ~ubuntu/.zshrc
 
   - |
     # change default shell
