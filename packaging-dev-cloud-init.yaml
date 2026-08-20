@@ -1,0 +1,161 @@
+#cloud-config
+---
+package_update: true
+
+packages:
+  - python3-pip
+  - python3-venv
+  - jq
+  - sysstat
+  - zsh
+  - fzf
+  - tox
+  - gnome-keyring
+  - kitty-terminfo
+  - sshfs
+  - htop
+  - tcpdump
+  - gh
+
+  # Debian/Ubuntu packaging core
+  - build-essential
+  - fakeroot
+  - devscripts
+  - debhelper
+  - dh-make
+  - quilt
+  - pristine-tar
+  - lintian
+  - dput
+  - ubuntu-dev-tools
+  - git-ubuntu
+  - ubuntu-keyring
+  - debian-keyring
+  - autopkgtest
+  - sbuild
+  - schroot
+  - debootstrap
+  - apt-file
+  - dctrl-tools
+  - equivs
+  - debian-goodies
+  - software-properties-common
+  - debsums
+  - python3-launchpadlib
+  - python3-debian
+  - python3-distro-info
+
+snap:
+  commands:
+    - snap install --classic opencode
+    - snap install --classic just
+    - snap install --classic git-ubuntu
+    - sudo snap install go --classic
+    - snap refresh
+
+write_files:
+  - path: /home/ubuntu/.dput.cf
+    owner: ubuntu:ubuntu
+    permissions: "0600"
+    content: |
+      [ubuntu]
+      fqdn = upload.ubuntu.com
+      incoming = ~ubuntu
+      method = ftp
+      login = anonymous
+
+      [ppa]
+      fqdn = ppa.launchpad.net
+      incoming = ~%(ppa)s/ubuntu
+      method = ftp
+      login = anonymous
+      allow_unsigned_uploads = 0
+  - path: /home/ubuntu/bin/sbuild-noble
+    owner: ubuntu:ubuntu
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      set -e
+      if [ ! -d /var/lib/sbuild/noble-amd64 ]; then
+        sudo mk-sbuild noble --type=file
+      fi
+      exec sbuild --dist=noble "$@"
+
+runcmd:
+  - DEBIAN_FRONTEND=noninteractive apt-get remove -y landscape-client landscape-common adwaita-icon-theme humanity-icon-theme
+  - DEBIAN_FRONTEND=noninteractive apt-get -y upgrade
+  - DEBIAN_FRONTEND=noninteractive apt-get -y autoremove
+
+  - |
+    # enable deb-src lines (deb822 on noble+, legacy sources.list elsewhere)
+    if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
+      sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/ubuntu.sources
+    else
+      sed -i 's/^# deb-src/deb-src/' /etc/apt/sources.list
+    fi
+    apt-get update
+
+  - |
+    # Install uv for the ubuntu user
+    sudo -u ubuntu curl -LsSf https://astral.sh/uv/install.sh | sudo -u ubuntu sh
+
+  - |
+    # disable swap
+    sysctl -w vm.swappiness=0
+    echo "vm.swappiness = 0" | tee -a /etc/sysctl.conf
+    swapoff -a
+
+  - |
+    # disable unnecessary services
+    systemctl disable man-db.timer man-db.service --now
+    systemctl disable apport.service apport-autoreport.service  --now
+    systemctl disable apt-daily.service apt-daily.timer --now
+    systemctl disable apt-daily-upgrade.service apt-daily-upgrade.timer --now
+    systemctl disable unattended-upgrades.service --now
+    systemctl disable motd-news.service motd-news.timer --now
+    systemctl disable bluetooth.target --now
+    systemctl disable ua-messaging.service ua-messaging.timer --now
+    systemctl disable ua-timer.timer ua-timer.service --now
+    systemctl disable systemd-tmpfiles-clean.timer --now
+
+    # Disable IPv6
+    echo "net.ipv6.conf.all.disable_ipv6=1" | tee -a /etc/sysctl.conf
+    echo "net.ipv6.conf.default.disable_ipv6=1" | tee -a /etc/sysctl.conf
+    echo "net.ipv6.conf.lo.disable_ipv6=1" | tee -a /etc/sysctl.conf
+    sysctl -p
+
+  - |
+    # set right owner to /home/ubuntu directory
+    chown ubuntu:ubuntu /home/ubuntu
+
+    # oh-my-zsh
+    sudo -u ubuntu sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+    sudo -u ubuntu git clone https://github.com/zsh-users/zsh-autosuggestions.git ~ubuntu/.oh-my-zsh/custom/plugins/zsh-autosuggestions
+    sudo -u ubuntu git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ~ubuntu/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting
+    sudo -u ubuntu sed -i 's/plugins=(git)/plugins=(fzf git zsh-autosuggestions zsh-syntax-highlighting virtualenv colored-man-pages juju colorize)/g' ~ubuntu/.zshrc
+    sudo -u ubuntu echo 'export PATH=$PATH:$HOME/.local/bin' >> ~ubuntu/.zshrc
+
+  - |
+    # Create python venv at ~/repos/venv and auto-activate on login
+    sudo -u ubuntu mkdir -p /home/ubuntu/repos
+    sudo -u ubuntu python3 -m venv /home/ubuntu/repos/venv
+    sudo -u ubuntu echo 'source ~/repos/venv/bin/activate' >> ~ubuntu/.zshrc
+
+  - |
+    # Install useful ubuntu-helpers scripts into ~/bin
+    sudo -u ubuntu mkdir -p /home/ubuntu/bin
+    sudo -u ubuntu git clone https://git.launchpad.net/~ubuntu-server/+git/ubuntu-helpers /tmp/ubuntu-helpers
+    for script in install-build-deps pkg-get pkg-versions pkg-source enable-debsrc enable-proposed parse-build-log parse-autopkgtest-log rmad; do
+      sudo -u ubuntu ln -sf /tmp/ubuntu-helpers/bryce/$script /home/ubuntu/bin/$script
+    done
+    sudo -u ubuntu echo 'export PATH=$PATH:$HOME/bin' >> ~ubuntu/.zshrc
+
+  - |
+    # Add ubuntu to the sbuild group
+    adduser ubuntu sbuild
+
+  - |
+    # change default shell
+    sudo chsh -s /bin/zsh ubuntu
+
+final_message: "The system is finally up, after $UPTIME seconds"
