@@ -78,6 +78,11 @@ runcmd:
   # Switch default shell to Zsh
   - chsh -s /bin/zsh ubuntu
 
+  - |
+    # Install oh-my-pi (omp)
+    sudo -u ubuntu sh -c 'curl -fsSL https://omp.sh/install | sh'
+    sudo -u ubuntu sh -c "echo 'eval \"\$(omp completions zsh)\"' >> /home/ubuntu/.zshrc"
+
   # Generate noble sbuild chroot environment
   - sudo -u ubuntu mk-sbuild noble
 

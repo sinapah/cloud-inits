@@ -41,6 +41,10 @@ runcmd:
   - DEBIAN_FRONTEND=noninteractive apt-get -y autoremove
 
   - |
+    # change default shell early so it's set even if later steps fail
+    chsh -s /bin/zsh ubuntu
+
+  - |
     # disable swap
     sysctl -w vm.swappiness=0
     echo "vm.swappiness = 0" | tee -a /etc/sysctl.conf
@@ -85,6 +89,11 @@ runcmd:
     sudo -u ubuntu echo 'source ~/repos/venv/bin/activate' >> ~ubuntu/.zshrc
 
   - |
+    # Install oh-my-pi (omp)
+    sudo -u ubuntu sh -c 'curl -fsSL https://omp.sh/install | sh'
+    sudo -u ubuntu sh -c "echo 'eval \"\$(omp completions zsh)\"' >> /home/ubuntu/.zshrc"
+
+  - |
     # Make sure juju directory is there
     sudo -u ubuntu mkdir -p /home/ubuntu/.local/share/juju
 
@@ -95,10 +104,6 @@ runcmd:
     chmod +x /home/ubuntu/.local/bin/goss
     sudo -u ubuntu curl -L https://raw.githubusercontent.com/goss-org/goss/master/extras/kgoss/kgoss -o /home/ubuntu/.local/bin/kgoss
     chmod +x /home/ubuntu/.local/bin/kgoss
-
-  - |
-    # change default shell
-    sudo chsh -s /bin/zsh ubuntu
 
   - |
     # setup lxd
@@ -117,12 +122,12 @@ runcmd:
 
   - |
     # Extract host IP address (for metallb and ck8s load balancer)
-    export IPADDR=$(ip -4 -j route get 2.2.2.2 | jq -r '.[0].prefsrc')
+    IPADDR=$(ip -4 -j route get 2.2.2.2 | jq -r '.[0].prefsrc')
     echo "Using IPADDR=$IPADDR"
 
     # Wait for the Ceph Object Gateway to actually be available
     echo "Waiting for microceph RGW to start on $IPADDR:8080..."
-    for i in {1..30}; do
+    for i in $(seq 1 30); do
       if curl -s "http://$IPADDR:8080" > /dev/null; then
         echo "RGW is up and responding!"
         break
@@ -132,7 +137,7 @@ runcmd:
     done
 
     # Setup buckets for Mimir, Loki, and Tempo
-    for BUCKET in loki mimir tempo; do                
+    for BUCKET in loki mimir tempo; do
       s3cmd --host="$IPADDR:8080" \
         --access_key=access-key \
         --secret_key=secret-key \
@@ -141,15 +146,15 @@ runcmd:
         mb "s3://$BUCKET"
     done
 
-  - |
     # Setup CK8s (Canonical K8s)
-    sudo k8s bootstrap
-    sudo k8s status --wait-ready
-    sudo k8s enable local-storage
-    sudo k8s enable load-balancer
-    sudo k8s set load-balancer.l2-mode=true load-balancer.cidrs="${IPADDR}/32"
-    sudo k8s status --wait-ready
-    sudo  k8s kubectl config view --raw | sudo -u ubuntu /snap/juju/current/bin/juju add-k8s ck8s --client
+    # Note: k8s bootstrap + juju bootstrap takes 20-40 min; use --timeout 3600 with multipass launch
+    k8s bootstrap
+    k8s status --wait-ready
+    k8s enable local-storage
+    k8s enable load-balancer
+    k8s set load-balancer.l2-mode=true load-balancer.cidrs="${IPADDR}/32"
+    k8s status --wait-ready
+    k8s kubectl config view --raw | sudo -u ubuntu /snap/juju/current/bin/juju add-k8s ck8s --client
     sudo -u ubuntu juju bootstrap ck8s
     sudo -u ubuntu juju bootstrap localhost lxd
 

@@ -31,6 +31,10 @@ runcmd:
   - DEBIAN_FRONTEND=noninteractive apt-get -y autoremove
 
   - |
+    # change default shell early so it's set even if later steps fail
+    chsh -s /bin/zsh ubuntu
+
+  - |
     # Install uv for the ubuntu user
     sudo -u ubuntu curl -LsSf https://astral.sh/uv/install.sh | sudo -u ubuntu sh
 
@@ -77,7 +81,8 @@ runcmd:
     sudo -u ubuntu echo 'source ~/repos/venv/bin/activate' >> ~ubuntu/.zshrc
 
   - |
-    # change default shell
-    sudo chsh -s /bin/zsh ubuntu
+    # Install oh-my-pi (omp)
+    sudo -u ubuntu sh -c 'curl -fsSL https://omp.sh/install | sh'
+    sudo -u ubuntu sh -c "echo 'eval \"\$(omp completions zsh)\"' >> /home/ubuntu/.zshrc"
 
 final_message: "The system is finally up, after $UPTIME seconds"
